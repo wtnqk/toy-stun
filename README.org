@@ -1,12 +1,29 @@
-* Toy STUN Server
+#+TITLE: Toy STUN Server
+#+AUTHOR: wtnqk
+#+DATE: 2025-07-23
 
-このプロジェクトは、STUN (Session Traversal Utilities for NAT) サーバーの実装です。
+* STUNサーバー仕様
 
-** STUNプロトコル仕様
+** 概要
+STUN (Session Traversal Utilities for NAT) は、NAT (Network Address Translation) を通過するためのプロトコルで、クライアントが自身のパブリックIPアドレスとポート番号を検出できるようにします。
+RFC 5389で定義されており、WebRTCやVoIPなどのリアルタイム通信で広く使用されています。
 
-*** 概要
-STUN (RFC 5389) は、NAT (Network Address Translation) を通過するためのプロトコルで、クライアントが自身のパブリックIPアドレスとポート番号を検出できるようにします。
+** 主要機能
+*** 1. バインディング (Binding)
+- クライアントは自身のパブリックアドレスを検出
+- サーバーはクライアントの送信元アドレスを返送
+- NAT種別の検出サポート
 
+*** 2. 認証機能 (オプション)
+- MESSAGE-INTEGRITY属性による認証
+- USERNAME/REALM/NONCEによる認証メカニズム
+- 共有秘密鍵ベースの認証
+
+*** 3. フィンガープリント
+- FINGERPRINT属性によるメッセージ完全性チェック
+- CRC-32を使用した検証
+
+** プロトコル仕様
 *** メッセージフォーマット
 
 **** STUNヘッダー (20バイト)
@@ -30,7 +47,6 @@ STUN (RFC 5389) は、NAT (Network Address Translation) を通過するための
 - *Transaction ID* (96ビット): リクエストとレスポンスを関連付けるためのID
 
 *** メッセージタイプ
-
 **** リクエスト
 - *Binding Request* (=0x0001=): クライアントがサーバーに送信し、自身のパブリックアドレスを要求
 
@@ -39,7 +55,6 @@ STUN (RFC 5389) は、NAT (Network Address Translation) を通過するための
 - *Binding Error Response* (=0x0111=): エラー時のレスポンス
 
 *** 属性フォーマット
-
 属性は TLV (Type-Length-Value) 形式:
 #+begin_example
  0                   1                   2                   3
@@ -52,7 +67,6 @@ STUN (RFC 5389) は、NAT (Network Address Translation) を通過するための
 #+end_example
 
 *** 主要な属性タイプ
-
 **** MAPPED-ADDRESS (0x0001)
 クライアントのアドレスとポートを含む（後方互換性のため）
 
@@ -84,7 +98,6 @@ STUN (RFC 5389) は、NAT (Network Address Translation) を通過するための
 メッセージの完全性チェック用CRC-32（オプション）
 
 *** 基本的な処理フロー
-
 1. *クライアント → サーバー*: Binding Request送信
    - Transaction IDを生成
    - Magic Cookieを設定
@@ -100,18 +113,162 @@ STUN (RFC 5389) は、NAT (Network Address Translation) を通過するための
    - XOR-MAPPED-ADDRESS属性を含める
 
 *** エラーコード
-
 - *400 Bad Request*: 不正なリクエスト
 - *420 Unknown Attribute*: 未知の必須属性
 - *500 Server Error*: サーバー内部エラー
 
-*** セキュリティ考慮事項
+* 実装計画
+
+** フェーズ1: 基本機能実装（3-5日）
+*** 1.1 プロジェクトセットアップ
+- Go言語での実装
+- 基本的なプロジェクト構造の作成
+- 依存関係の管理（go.mod）
+
+*** 1.2 STUNメッセージパーサー
+- STUNメッセージヘッダーのパース
+- 基本的な属性のパース/エンコード
+- バイトオーダー変換処理
+
+*** 1.3 基本的なバインディング機能
+- Binding Request/Responseの処理
+- XOR-MAPPED-ADDRESS属性の実装
+- UDPソケット処理
+
+** フェーズ2: 完全なSTUN機能（3-5日）
+*** 2.1 属性の完全実装
+- MAPPED-ADDRESS（後方互換性）
+- ERROR-CODE属性
+- SOFTWARE属性
+- UNKNOWN-ATTRIBUTES属性
+
+*** 2.2 エラーハンドリング
+- 各種エラーコードの実装
+- 不正なメッセージの処理
+- タイムアウト処理
+
+*** 2.3 NAT種別検出
+- 複数のバインディングテスト
+- NAT種別の判定ロジック
+- 結果のレポート機能
+
+** フェーズ3: 認証とセキュリティ（3-4日）
+*** 3.1 認証機能（オプション）
+- MESSAGE-INTEGRITY属性の実装
+- USERNAME/REALM/NONCE属性
+- HMAC-SHA1計算
+
+*** 3.2 セキュリティ機能
+- FINGERPRINT属性の実装
+- Rate limiting
+- DDoS対策
+- ロギングとモニタリング
+
+** フェーズ4: 最適化とテスト（2-3日）
+*** 4.1 パフォーマンス最適化
+- 並行処理の最適化
+- メモリプールの使用
+- ゼロコピー最適化
+
+*** 4.2 テストスイート
+- 単体テスト
+- 統合テスト
+- ベンチマークテスト
+- 相互運用性テスト
+
+* ディレクトリ構造
+
+#+BEGIN_SRC
+toy-stun/
+├── cmd/
+│   └── stunserver/
+│       └── main.go          # メインエントリーポイント
+├── internal/
+│   ├── server/
+│   │   ├── server.go        # STUNサーバーのメイン実装
+│   │   ├── handler.go       # メッセージハンドラー
+│   │   └── config.go        # サーバー設定
+│   ├── message/
+│   │   ├── message.go       # STUNメッセージ構造体
+│   │   ├── header.go        # ヘッダー処理
+│   │   └── types.go         # メッセージタイプ定義
+│   ├── attribute/
+│   │   ├── attribute.go     # 属性インターフェース
+│   │   ├── address.go       # アドレス属性
+│   │   ├── error.go         # エラー属性
+│   │   └── fingerprint.go   # フィンガープリント属性
+│   ├── parser/
+│   │   ├── parser.go        # メッセージパーサー
+│   │   └── encoder.go       # メッセージエンコーダー
+│   └── nat/
+│       └── detector.go      # NAT種別検出
+├── pkg/
+│   └── utils/
+│       ├── network.go       # ネットワークユーティリティ
+│       └── crc32.go         # CRC32計算
+├── test/
+│   ├── unit/               # 単体テスト
+│   └── integration/        # 統合テスト
+├── configs/
+│   └── server.yaml         # サーバー設定ファイル
+├── go.mod
+├── go.sum
+├── Makefile
+└── README.org
+#+END_SRC
+
+* 技術スタック
+
+** 言語とフレームワーク
+- Go 1.21+
+- 標準ライブラリを最大限活用
+- 最小限の外部依存
+
+** 主要な技術選択
+- UDPソケットプログラミング
+- 並行処理（goroutines）
+- バイナリプロトコル処理
+- 構造化ロギング（slog）
+
+** 開発ツール
+- golangci-lint（コード品質）
+- go test（テスト）
+- Wireshark（プロトコル解析）
+- Makefile（ビルド自動化）
+
+* 実装の優先順位
+
+1. *最小動作実装* (MVP)
+   - 基本的なBinding Request/Response
+   - XOR-MAPPED-ADDRESS属性のみ
+   - シンプルなUDPサーバー
+
+2. *RFC準拠の実装*
+   - 全必須属性のサポート
+   - 完全なエラーハンドリング
+   - 適切なタイムアウト処理
+
+3. *プロダクション対応*
+   - セキュリティ機能
+   - パフォーマンス最適化
+   - モニタリング機能
+
+4. *拡張機能*
+   - TCP/TLSサポート
+   - IPv6完全サポート
+   - NAT種別検出機能
+   - 管理API
+
+* セキュリティ考慮事項
 
 - STUNサーバーは認証なしで動作するため、DDoS攻撃の対象になりやすい
 - レート制限の実装を推奨
 - 必要に応じてMESSAGE-INTEGRITYやFINGERPRINT属性を使用
+- 送信元IPアドレスの検証
+- リフレクション攻撃の防止
 
-*** 参考文献
+* 参考資料
 
 - [[https://datatracker.ietf.org/doc/html/rfc5389][RFC 5389 - Session Traversal Utilities for NAT (STUN)]]
 - [[https://datatracker.ietf.org/doc/html/rfc8489][RFC 8489 - Session Traversal Utilities for NAT (STUN)]] (最新版)
+- [[https://datatracker.ietf.org/doc/html/rfc3489][RFC 3489 - STUN - Simple Traversal of User Datagram Protocol (UDP) Through Network Address Translators (NATs)]] (旧版、参考)
